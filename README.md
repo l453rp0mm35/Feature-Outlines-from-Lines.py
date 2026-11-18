@@ -2,11 +2,10 @@
 
 A QGIS Processing script that turns the outlines of archaeological features, drawn as a mix of **open and closed lines**, into **polygons covering the full extent of each feature**. Attribute values and vertex Z values are carried over, like in the native *Lines to polygons* tool.
 
-![Input feature lines](docs/images/01_input_feature_lines.png)
-
-*Input: feature lines of an excavated stone setting – many closed and open lines whose ends do not meet exactly.*
-
-![Resulting feature polygons](docs/images/02_result_feature_polygons.png)
+<p>
+  <img src="01_input_feature_lines.png" alt="Input feature lines" width="380">
+  <img src="02_result_feature_polygons.png" alt="Resulting feature polygons" width="380">
+</p>
 
 *Result: one polygon per stone/feature outline (coloured by an attribute of the layer). Lines that form no outline, such as the small open line at the upper right, produce no polygon.*
 
@@ -72,8 +71,12 @@ Attributes are copied from the **longest line of each cluster**; no fields are a
 
 ## Troubleshooting in a nutshell
 
-![Result with one unclosed outline](docs/images/03_result_with_unclosed_outline.png)
+Result with one unclosed outline
 
+<p>
+ <img src="03_result_with_unclosed_outline.png" alt="Resulting feature polygons" width="380">
+</p>
+   
 *Result for one feature. The line at the lower left is not connected to the rest of the outline, so the area behind it is missing. The QC layer marks such an end; raising the tolerance or snapping the end closes the outline.*
 
 | Symptom | Cause and remedy |
@@ -83,7 +86,7 @@ Attributes are copied from the **longest line of each cluster**; no fields are a
 | A free area inside the feature is filled | It is completely enclosed by lines and cannot be told apart from a stone (see limitations) |
 | A cluster gives no polygon | No closed outline within tolerance. Use a fallback or fix the lines |
 
-More in the [user manual](docs/USER_MANUAL.md).
+More in the [user manual](USER_MANUAL.md).
 
 ## Limitations
 
@@ -93,8 +96,7 @@ More in the [user manual](docs/USER_MANUAL.md).
 
 ## Documentation
 
-- [User manual](docs/USER_MANUAL.md)
-- [Release notes](RELEASE_NOTES.md)
+- [User manual](USER_MANUAL.md)
 
 ## License and author
 
