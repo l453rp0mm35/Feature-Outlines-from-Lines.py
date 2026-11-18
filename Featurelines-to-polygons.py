@@ -7,7 +7,7 @@ drawn as a mix of open and closed lines, into polygons covering the full
 extent of each feature. Vertex Z values and attribute values are carried over.
 
     Author:  L453RP0MM35
-    Version: 1.0.0
+    Version: 1.0.1
     License: MIT (see LICENSE)
 
 Installation
@@ -23,7 +23,8 @@ Method (network approach, comparable to the native "Lines to polygons")
        gap tolerance. Only line ENDS are bridged - parallel lines are never
        glued together, so free areas with a narrow opening stay open.
     4. The network is polygonized and all faces of a cluster are united.
-    5. Optionally, overlapping result polygons are merged.
+    5. Optionally, overlapping result polygons are merged - only polygons with
+       the same group value, so different features are never combined.
 
 Attributes are copied from the longest line of a cluster (no fields are
 added). The Z values of the input vertices are preserved. All dialog settings
@@ -57,7 +58,7 @@ from qgis.core import (
 )
 
 __author__ = 'L453RP0MM35'
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 __license__ = 'MIT'
 
 SETTINGS_SCOPE = 'Featurelines_to_Polygons'   # key prefix inside the project file
@@ -201,7 +202,7 @@ class FeaturelinesToPolygons(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber.Double, minValue=0.0, maxValue=1.0,
             defaultValue=_get('DoubleEntry', 'conc', 0.3)))
         self.addParameter(QgsProcessingParameterBoolean(
-            self.MERGE, 'Merge overlapping result polygons',
+            self.MERGE, 'Merge overlapping result polygons (same group value only)',
             defaultValue=_get('BoolEntry', 'merge', True)))
         self.addParameter(QgsProcessingParameterNumber(
             self.MINAREA, 'Minimum area (smaller results are discarded)',
@@ -293,14 +294,16 @@ class FeaturelinesToPolygons(QgsProcessingAlgorithm):
                 skipped.append(min(members))
                 continue
 
-            attrs = list(feats[max(members, key=lambda i: feats[i].geometry().length())]
-                         .attributes())
+            main = feats[max(members, key=lambda i: feats[i].geometry().length())]
+            attrs = list(main.attributes())
+            group_value = None if not group_field or _is_blank(main[group_field]) \
+                else main[group_field]
             zmean = None
             for part in parts:
                 if has_z and not part.constGet().is3D():   # hull fallback has no Z
                     zmean = _mean_z(geoms) if zmean is None else zmean
                     part.get().addZValue(zmean)
-                records.append((part, attrs))
+                records.append((part, attrs, group_value))
 
         if skipped:
             feedback.pushWarning(
@@ -311,7 +314,7 @@ class FeaturelinesToPolygons(QgsProcessingAlgorithm):
         if do_merge and len(records) > 1:
             records = self._merge(records, feedback)
 
-        for geom, attrs in records:
+        for geom, attrs, _ in records:
             for part in geom.asGeometryCollection():
                 if _is_type(part, QgsWkbTypes.PolygonGeometry):
                     out = QgsFeature(out_fields)
@@ -484,17 +487,21 @@ class FeaturelinesToPolygons(QgsProcessingAlgorithm):
 
     @staticmethod
     def _merge(records, feedback):
-        """Union result polygons that overlap by area; keep the largest one's attributes."""
+        """Union result polygons of the SAME group value that overlap by area.
+
+        Polygons of different group values (different features) are never merged.
+        The merged polygon keeps the attributes of the largest part.
+        """
         uf = _UnionFind()
         index = QgsSpatialIndex()
-        for i, (geom, _) in enumerate(records):
+        for i, (geom, _, _) in enumerate(records):
             uf.add(i)
             feat = QgsFeature(i)
             feat.setGeometry(geom)
             index.addFeature(feat)
-        for i, (geom, _) in enumerate(records):
+        for i, (geom, _, key) in enumerate(records):
             for j in index.intersects(geom.boundingBox()):
-                if j > i and geom.intersects(records[j][0]):
+                if j > i and records[j][2] == key and geom.intersects(records[j][0]):
                     if geom.intersection(records[j][0]).area() > 0:
                         uf.union(i, j)
 
@@ -504,7 +511,8 @@ class FeaturelinesToPolygons(QgsProcessingAlgorithm):
                 merged.append(records[ids[0]])
                 continue
             group = [records[i] for i in ids]
-            attrs = max(group, key=lambda r: r[0].area())[1]
-            merged.append((QgsGeometry.unaryUnion([r[0] for r in group]), attrs))
+            largest = max(group, key=lambda r: r[0].area())
+            merged.append((QgsGeometry.unaryUnion([r[0] for r in group]),
+                           largest[1], largest[2]))
         feedback.pushInfo('Merge: %d -> %d polygons.' % (len(records), len(merged)))
         return merged
